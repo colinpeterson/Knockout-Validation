@@ -194,7 +194,7 @@ kv.configuration = configuration;
 			}
 		}
 	};
-}());;var api = (function () {
+}());;var api = (function() {
 
 	var isInitialized = 0,
 		configuration = kv.configuration,
@@ -225,16 +225,18 @@ kv.configuration = configuration;
 		cleanUpSubscriptions(context);
 		traverseGraph(obj, context);
 		dispose(context);
-		}
+	}
 
 	function traverseGraph(obj, context, level) {
 		var objValues = [],
 			val = obj.peek ? obj.peek() : obj;
 
-		if (obj.__kv_traversed === true) { return; }
+		if (obj.__kv_traversed === true) {
+			return;
+		}
 
 		if (context.options.deep) {
-	    obj.__kv_traversed = true;
+			obj.__kv_traversed = true;
 			context.flagged.push(obj);
 		}
 
@@ -245,29 +247,40 @@ kv.configuration = configuration;
 		if (ko.isObservable(obj)) {
 
 			//make sure it is validatable object
-			if (!obj.isValid) { obj.extend({ validatable: true }); }
-			context.validatables.push(obj);
+			if (!obj.isValid) {
+				obj.extend({ validatable: true });
+			}
 
-			if(context.options.live && utils.isObservableArray(obj)) {
-				context.subscriptions.push(obj.subscribe(function () {
+			// Special case for validatedObservables (has neither isModified nor 'errors' properties)
+			if (obj.errors && obj.isValid) {
+				// Do not push the observable to validatables collection because collectErrors
+				// and isAnyMessageShown will fail
+			}
+			else {
+				context.validatables.push(obj);
+			}
+
+			if (context.options.live && utils.isObservableArray(obj)) {
+				context.subscriptions.push(obj.subscribe(function() {
 					context.graphMonitor.valueHasMutated();
 				}));
-		}
+			}
 		}
 
 		//get list of values either from array or object but ignore non-objects
 		// and destroyed objects
 		if (val && !val._destroy) {
 			if (utils.isArray(val)) {
-			objValues = val;
-			} else if (utils.isObject(val)) {
+				objValues = val;
+			}
+			else if (utils.isObject(val)) {
 				objValues = utils.values(val);
-		}
+			}
 		}
 
-		//process recurisvely if it is deep grouping
+		//process recursively if it is deep grouping
 		if (level !== 0) {
-			utils.forEach(objValues, function (observable) {
+			utils.forEach(objValues, function(observable) {
 
 				//but not falsy things and not HTML Elements
 				if (observable && !observable.nodeType) {
@@ -296,7 +309,7 @@ kv.configuration = configuration;
 				return;
 			}
 
-			//becuase we will be accessing options properties it has to be an object at least
+			//because we will be accessing options properties it has to be an object at least
 			options = options || {};
 			//if specific error classes are not provided then apply generic errorClass
 			//it has to be done on option so that options.errorClass can override default
@@ -312,7 +325,7 @@ kv.configuration = configuration;
 
 			isInitialized = 1;
 		},
-		// backwards compatability
+		// backwards compatibility
 		configure: function (options) { kv.init(options); },
 
 		// resets the config back to its original state
@@ -334,13 +347,14 @@ kv.configuration = configuration;
 				flagged: [],
 				subscriptions: [],
 				validatables: []
-        };
+			};
 
 			var result = null;
 
 			//if using observables then traverse structure once and add observables
 			if (options.observable) {
-				runTraversal(obj, context);
+				// No need to run traversal now since the computed will do this when it's created
+				//runTraversal(obj, context);
 
 				result = ko.computed(function () {
 					context.graphMonitor(); //register dependency
@@ -371,15 +385,26 @@ kv.configuration = configuration;
 			};
 
 			result.isAnyMessageShown = function () {
-				var invalidAndModifiedPresent = false;
-
 				// ensure we have latest changes
 				result();
 
-				invalidAndModifiedPresent = !!koUtils.arrayFirst(context.validatables, function (observable) {
+				var invalidAndModifiedPresent = !!koUtils.arrayFirst(context.validatables, function (observable) {
 					return !observable.isValid() && observable.isModified();
 				});
 				return invalidAndModifiedPresent;
+			};
+
+			// This method is kept internal until its implementation is accepted / rejected
+			result._refresh = function(newValue) {
+				obj = newValue;
+
+				if (options.observable) {
+					context.graphMonitor.valueHasMutated();
+				}
+				else {
+					runTraversal(newValue, context);
+					return collectErrors(context.validatables);
+				}
 			};
 
 			return result;
@@ -509,22 +534,22 @@ kv.configuration = configuration;
 			forEach(kv.configuration.html5Attributes, function (attr) {
 				if (utils.hasAttribute(element, attr)) {
 
-                    var params = element.getAttribute(attr) || true;
+					var params = element.getAttribute(attr) || true;
 
-                    if (attr === 'min' || attr === 'max')
-                    {
-                        // If we're validating based on the min and max attributes, we'll
-                        // need to know what the 'type' attribute is set to
-                        var typeAttr = element.getAttribute('type');
-                        if (typeof typeAttr === "undefined" || !typeAttr)
-                        {
-                            // From http://www.w3.org/TR/html-markup/input:
-                            //   An input element with no type attribute specified represents the
-                            //   same thing as an input element with its type attribute set to "text".
-                            typeAttr = "text";
-                        }
-                        params = {typeAttr: typeAttr, value: params};
-                    }
+					if (attr === 'min' || attr === 'max')
+					{
+						// If we're validating based on the min and max attributes, we'll
+						// need to know what the 'type' attribute is set to
+						var typeAttr = element.getAttribute('type');
+						if (typeof typeAttr === "undefined" || !typeAttr)
+						{
+							// From http://www.w3.org/TR/html-markup/input:
+							//   An input element with no type attribute specified represents the
+							//   same thing as an input element with its type attribute set to "text".
+							typeAttr = "text";
+						}
+						params = {typeAttr: typeAttr, value: params};
+					}
 
 					kv.addRule(valueAccessor(), {
 						rule: attr,
@@ -573,15 +598,13 @@ kv.configuration = configuration;
 						// we have to do some special things for the pattern validation
 						if (ctx.rule === "pattern" && params instanceof RegExp) {
 							// we need the pure string representation of the RegExpr without the //gi stuff
-							params = params.source; 
+							params = params.source;
 						}
-
-						element.setAttribute(attr, params); 
+						element.setAttribute(attr, params);
 					},
 					disposeWhenNodeIsRemoved: element
 				});
 			});
-
 			contexts = null;
 		},
 
@@ -1358,8 +1381,9 @@ ko.applyBindingsWithValidation = function (viewModel, rootNode, options) {
 	kv.init();
 
 	if (config) {
-		config = extend(extend({}, kv.configuration), config);
-		kv.utils.setDomData(node, config);
+		var newConfig = extend({}, kv.configuration);
+		extend(newConfig, config);
+		kv.utils.setDomData(node, newConfig);
 	}
 
 	ko.applyBindings(viewModel, node);
@@ -1374,25 +1398,48 @@ ko.applyBindings = function (viewModel, rootNode) {
 	origApplyBindings(viewModel, rootNode);
 };
 
-ko.validatedObservable = function (initialValue, options) {
-	if (!kv.utils.isObject(initialValue)) { return ko.observable(initialValue).extend({ validatable: true }); }
+/**
+ *
+ * @param initialValue {*} Initial value of the observable.
+ * @param [options] {Object} Grouping options. When specified it will force the returned observable to contain
+ * errors and isValid properties - regardless of initialValue value.
+ * @returns {observable}
+ */
+ko.validatedObservable = function(initialValue, options) {
+
+	if (!kv.utils.isObject(initialValue) && !options) {
+		return ko.observable(initialValue).extend({validatable: true});
+	}
 
 	var obsv = ko.observable(initialValue);
-	obsv.errors = kv.group(initialValue, options);
+	obsv.errors = kv.group(!kv.utils.isObject(initialValue) ? {} : initialValue, options);
 	obsv.isValid = ko.observable(obsv.errors().length === 0);
 
+	obsv.subscribe(function(newValue) {
+		if (!kv.utils.isObject(newValue)) {
+			/*
+			 * The validation group works on objects.
+			 * Since the new value is a primitive (scalar, null or undefined) we need
+			 * to create an empty object to pass along.
+			 */
+			newValue = {};
+		}
+		// Force the group to refresh
+		obsv.errors._refresh(newValue);
+		obsv.isValid(obsv.errors().length === 0);
+	});
 
+	// Keep isValid property in sync
 	if (ko.isObservable(obsv.errors)) {
-		obsv.errors.subscribe(function (errors) {
-				obsv.isValid(errors.length === 0);
-			});
-		}
-		else {
-			ko.computed(obsv.errors).subscribe(function (errors) {
-				obsv.isValid(errors.length === 0);
-			});
-		}
-
+		obsv.errors.subscribe(function(errors) {
+			obsv.isValid(errors.length === 0);
+		});
+	}
+	else {
+		ko.computed(obsv.errors).subscribe(function(errors) {
+			obsv.isValid(errors.length === 0);
+		});
+	}
 	return obsv;
 };
 ;}));

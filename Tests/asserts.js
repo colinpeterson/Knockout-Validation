@@ -27,6 +27,22 @@ QUnit.assert.observableIsNotValid = function(observable, value, ruleMessage) {
 	this.strictEqual(observable.error(), ruleMessage, 'message is correct');
 };
 
+QUnit.assert.isNull = function(actual, message) {
+	this.strictEqual(actual, null, message || 'Value is null');
+};
+
+QUnit.assert.isUndefined = function(actual, message) {
+	this.strictEqual(actual, undefined, message || 'Value is null');
+};
+
+QUnit.assert.isTrue = function(actual, message) {
+	this.strictEqual(actual, true, message || 'Value is true');
+};
+
+QUnit.assert.isFalse = function(actual, message) {
+	this.strictEqual(actual, false, message || 'Value is false');
+};
+
 QUnit.assert.violatesRequiredRule = function(observable, value, customMessage) {
 	var ruleMessage = customMessage || 'This field is required.';
 	this.observableIsNotValid(observable, value, ruleMessage);

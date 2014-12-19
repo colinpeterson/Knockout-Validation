@@ -1,4 +1,4 @@
-﻿var api = (function () {
+﻿var api = (function() {
 
 	var isInitialized = 0,
 		configuration = ko.validation.configuration,
@@ -29,16 +29,18 @@
 		cleanUpSubscriptions(context);
 		traverseGraph(obj, context);
 		dispose(context);
-		}
+	}
 
 	function traverseGraph(obj, context, level) {
 		var objValues = [],
 			val = obj.peek ? obj.peek() : obj;
 
-		if (obj.__kv_traversed === true) { return; }
+		if (obj.__kv_traversed === true) {
+			return;
+		}
 
 		if (context.options.deep) {
-	    obj.__kv_traversed = true;
+			obj.__kv_traversed = true;
 			context.flagged.push(obj);
 		}
 
@@ -49,29 +51,40 @@
 		if (ko.isObservable(obj)) {
 
 			//make sure it is validatable object
-			if (!obj.isValid) { obj.extend({ validatable: true }); }
-			context.validatables.push(obj);
+			if (!obj.isValid) {
+				obj.extend({ validatable: true });
+			}
 
-			if(context.options.live && utils.isObservableArray(obj)) {
-				context.subscriptions.push(obj.subscribe(function () {
+			// Special case for validatedObservables (has neither isModified nor 'errors' properties)
+			if (obj.errors && obj.isValid) {
+				// Do not push the observable to validatables collection because collectErrors
+				// and isAnyMessageShown will fail
+			}
+			else {
+				context.validatables.push(obj);
+			}
+
+			if (context.options.live && utils.isObservableArray(obj)) {
+				context.subscriptions.push(obj.subscribe(function() {
 					context.graphMonitor.valueHasMutated();
 				}));
-		}
+			}
 		}
 
 		//get list of values either from array or object but ignore non-objects
 		// and destroyed objects
 		if (val && !val._destroy) {
 			if (utils.isArray(val)) {
-			objValues = val;
-			} else if (utils.isObject(val)) {
+				objValues = val;
+			}
+			else if (utils.isObject(val)) {
 				objValues = utils.values(val);
-		}
+			}
 		}
 
-		//process recurisvely if it is deep grouping
+		//process recursively if it is deep grouping
 		if (level !== 0) {
-			utils.forEach(objValues, function (observable) {
+			utils.forEach(objValues, function(observable) {
 
 				//but not falsy things and not HTML Elements
 				if (observable && !observable.nodeType) {
@@ -100,7 +113,7 @@
 				return;
 			}
 
-			//becuase we will be accessing options properties it has to be an object at least
+			//because we will be accessing options properties it has to be an object at least
 			options = options || {};
 			//if specific error classes are not provided then apply generic errorClass
 			//it has to be done on option so that options.errorClass can override default
@@ -116,7 +129,7 @@
 
 			isInitialized = 1;
 		},
-		// backwards compatability
+		// backwards compatibility
 		configure: function (options) { ko.validation.init(options); },
 
 		// resets the config back to its original state
@@ -138,13 +151,14 @@
 				flagged: [],
 				subscriptions: [],
 				validatables: []
-        };
+			};
 
 			var result = null;
 
 			//if using observables then traverse structure once and add observables
 			if (options.observable) {
-				runTraversal(obj, context);
+				// No need to run traversal now since the computed will do this when it's created
+				//runTraversal(obj, context);
 
 				result = ko.computed(function () {
 					context.graphMonitor(); //register dependency
@@ -175,15 +189,26 @@
 			};
 
 			result.isAnyMessageShown = function () {
-				var invalidAndModifiedPresent = false;
-
 				// ensure we have latest changes
 				result();
 
-				invalidAndModifiedPresent = !!ko.utils.arrayFirst(context.validatables, function (observable) {
+				var invalidAndModifiedPresent = !!ko.utils.arrayFirst(context.validatables, function (observable) {
 					return !observable.isValid() && observable.isModified();
 				});
 				return invalidAndModifiedPresent;
+			};
+
+			// This method is kept internal until its implementation is accepted / rejected
+			result._refresh = function(newValue) {
+				obj = newValue;
+
+				if (options.observable) {
+					context.graphMonitor.valueHasMutated();
+				}
+				else {
+					runTraversal(newValue, context);
+					return collectErrors(context.validatables);
+				}
 			};
 
 			return result;
@@ -313,22 +338,22 @@
 			ko.utils.arrayForEach(ko.validation.configuration.html5Attributes, function (attr) {
 				if (utils.hasAttribute(element, attr)) {
 
-                    var params = element.getAttribute(attr) || true;
+					var params = element.getAttribute(attr) || true;
 
-                    if (attr === 'min' || attr === 'max')
-                    {
-                        // If we're validating based on the min and max attributes, we'll
-                        // need to know what the 'type' attribute is set to
-                        var typeAttr = element.getAttribute('type');
-                        if (typeof typeAttr === "undefined" || !typeAttr)
-                        {
-                            // From http://www.w3.org/TR/html-markup/input:
-                            //   An input element with no type attribute specified represents the
-                            //   same thing as an input element with its type attribute set to "text".
-                            typeAttr = "text";
-                        }
-                        params = {typeAttr: typeAttr, value: params};
-                    }
+					if (attr === 'min' || attr === 'max')
+					{
+						// If we're validating based on the min and max attributes, we'll
+						// need to know what the 'type' attribute is set to
+						var typeAttr = element.getAttribute('type');
+						if (typeof typeAttr === "undefined" || !typeAttr)
+						{
+							// From http://www.w3.org/TR/html-markup/input:
+							//   An input element with no type attribute specified represents the
+							//   same thing as an input element with its type attribute set to "text".
+							typeAttr = "text";
+						}
+						params = {typeAttr: typeAttr, value: params};
+					}
 
 					ko.validation.addRule(valueAccessor(), {
 						rule: attr,
@@ -377,15 +402,13 @@
 						// we have to do some special things for the pattern validation
 						if (ctx.rule === "pattern" && params instanceof RegExp) {
 							// we need the pure string representation of the RegExpr without the //gi stuff
-							params = params.source; 
+							params = params.source;
 						}
-
-						element.setAttribute(attr, params); 
+						element.setAttribute(attr, params);
 					},
 					disposeWhenNodeIsRemoved: element
 				});
 			});
-
 			contexts = null;
 		},
 
